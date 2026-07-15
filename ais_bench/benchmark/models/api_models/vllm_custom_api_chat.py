@@ -140,6 +140,11 @@ class VLLMCustomAPIChat(BaseAPIModel):
     async def parse_stream_response(self, json_content, output):
         if not output.response_id:
             output.response_id = json_content.get("id", "")
+        if not output.finish_reason:
+            for item in json_content.get("choices", []):
+                if item.get("finish_reason") is not None:
+                    output.finish_reason = item["finish_reason"]
+                    break
         for item in json_content.get("choices", []):
             if item["delta"].get("content"):
                 output.content += item["delta"]["content"]
@@ -150,6 +155,8 @@ class VLLMCustomAPIChat(BaseAPIModel):
     async def parse_text_response(self, json_content, output):
         output.response_id = json_content.get("id", "")
         for item in json_content.get("choices", []):
+            if item.get("finish_reason") is not None:
+                output.finish_reason = item["finish_reason"]
             if content:=item["message"].get("content"):
                 output.content += content
             if reasoning_content:=item["message"].get("reasoning_content") or item["message"].get("reasoning"):

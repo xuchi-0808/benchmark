@@ -23,6 +23,9 @@ class Output:
         self.input: list | str = None
         self.response_id: str = ""
         # Response ID from the API response (e.g., chatcmpl-xxx from OpenAI-compatible APIs)
+        self.finish_reason: str = ""
+        # Finish reason from the API response ("stop", "length", "content_filter", etc.)
+        # "length" indicates the response was truncated due to max_tokens limit
         self.uuid: str = ""
         # A unique identifier for each case:
         # In multi-turn dialogue scenarios, all turns of the same sample share the same uuid.

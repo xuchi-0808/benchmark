@@ -100,6 +100,9 @@ class VLLMCustomAPI(BaseAPIModel):
 
     async def parse_text_response(self, api_response: dict, output: Output):
         output.response_id = api_response.get("id", "")
+        for item in api_response.get("choices", []):
+            if item.get("finish_reason") is not None:
+                output.finish_reason = item["finish_reason"]
         generated_text = api_response.get("choices", [{}])[0].get("text", "")
         output.content = generated_text
         await self._parse_usage(api_response, output)
@@ -108,6 +111,11 @@ class VLLMCustomAPI(BaseAPIModel):
     async def parse_stream_response(self, api_response: dict, output: Output):
         if not output.response_id:
             output.response_id = api_response.get("id", "")
+        if not output.finish_reason:
+            for item in api_response.get("choices", []):
+                if item.get("finish_reason") is not None:
+                    output.finish_reason = item["finish_reason"]
+                    break
         generated_text = ""
         if len(api_response.get("choices", [])) > 0:
             generated_text = api_response["choices"][0]["text"]

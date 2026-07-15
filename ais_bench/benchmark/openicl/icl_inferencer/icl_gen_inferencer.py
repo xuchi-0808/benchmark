@@ -96,19 +96,22 @@ class GenInferencer(BaseApiInferencer, BaseLocalInferencer):
 
         await self.output_handler.report_cache_info(index, input, output, data_abbr, gold)
 
-        # Append raw result to live JSONL
+        # Append result to live JSONL (both success and failure)
         live_dir = self.output_json_filepath
         os.makedirs(live_dir, exist_ok=True)
         live_record = {
             "data_abbr": data_abbr,
             "id": index,
             "success": output.success,
+            "finish_reason": getattr(output, "finish_reason", "") or "",
             "response_id": getattr(output, "response_id", ""),
-            "prediction": output.get_prediction(),
+            "prediction": output.get_prediction() if output.success else "",
             "input_tokens": getattr(output, "input_tokens", 0),
             "output_tokens": getattr(output, "output_tokens", 0),
             "uuid": getattr(output, "uuid", ""),
         }
+        if not output.success:
+            live_record["error_info"] = output.error_info
         with open(os.path.join(live_dir, "live_infer.jsonl"), "a") as f:
             f.write(json.dumps(live_record, ensure_ascii=False) + "\n")
 
