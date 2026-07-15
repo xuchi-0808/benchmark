@@ -113,7 +113,7 @@ class GenInferencer(BaseApiInferencer, BaseLocalInferencer):
         if not output.success:
             live_record["error_info"] = output.error_info
         with open(os.path.join(live_dir, "live_infer.jsonl"), "a") as f:
-            f.write(json.dumps(live_record, ensure_ascii=False) + "\n")
+            f.write(json.dumps(live_record, ensure_ascii=False, indent=2) + "\n\n")
 
     def batch_inference(
         self,
