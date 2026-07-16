@@ -14,7 +14,10 @@ from ais_bench.benchmark.registry import ICL_INFERENCERS
 from ais_bench.benchmark.openicl.icl_retriever import BaseRetriever
 from ais_bench.benchmark.openicl.icl_inferencer.icl_base_api_inferencer import BaseApiInferencer
 from ais_bench.benchmark.openicl.icl_inferencer.icl_base_local_inferencer import BaseLocalInferencer
-from ais_bench.benchmark.openicl.icl_inferencer.output_handler.gen_inferencer_output_handler import GenInferencerOutputHandler
+from ais_bench.benchmark.openicl.icl_inferencer.output_handler.gen_inferencer_output_handler import (
+    GenInferencerOutputHandler,
+    BASE64_MAX_DISPLAY_LEN,
+)
 
 
 @ICL_INFERENCERS.register_module()
@@ -99,9 +102,21 @@ class GenInferencer(BaseApiInferencer, BaseLocalInferencer):
         # Append result to live JSONL (both success and failure)
         live_dir = self.output_json_filepath
         os.makedirs(live_dir, exist_ok=True)
+        # Truncate inline base64 image data for readability
+        safe_input = input
+        if isinstance(input, list):
+            safe_input = copy.deepcopy(input)
+            for msg in safe_input:
+                if isinstance(msg.get("prompt"), list):
+                    for part in msg["prompt"]:
+                        if isinstance(part, dict) and isinstance(part.get("image_url"), dict):
+                            url = part["image_url"].get("url", "")
+                            if isinstance(url, str) and len(url) > BASE64_MAX_DISPLAY_LEN:
+                                part["image_url"]["url"] = url[:BASE64_MAX_DISPLAY_LEN] + " ..."
         live_record = {
             "data_abbr": data_abbr,
             "id": index,
+            "input": safe_input,
             "success": output.success,
             "finish_reason": getattr(output, "finish_reason", "") or "",
             "response_id": getattr(output, "response_id", ""),
