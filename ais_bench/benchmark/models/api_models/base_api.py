@@ -204,6 +204,43 @@ class BaseAPIModel(BaseModel):
         if pending is not None:
             yield pending
 
+    async def _format_error(self, response) -> str:
+        """Format error info from a non-200 HTTP response.
+
+        Captures status code, reason phrase, and response body so the user can
+        see the actual server-side error message instead of just "Bad Request".
+        """
+        body = ""
+        try:
+            raw = await response.text()
+            if raw:
+                # Try to extract structured error message from common formats
+                try:
+                    data = json.loads(raw)
+                    if isinstance(data, dict):
+                        # OpenAI-style: {"error": {"message": "..."}}
+                        err = data.get("error")
+                        if isinstance(err, dict) and err.get("message"):
+                            body = str(err["message"])
+                        elif isinstance(err, str):
+                            body = err
+                        # vLLM-style: {"detail": "..."}
+                        elif data.get("detail"):
+                            body = str(data["detail"])
+                        elif data.get("message"):
+                            body = str(data["message"])
+                        else:
+                            body = raw
+                    else:
+                        body = raw
+                except (json.JSONDecodeError, ValueError):
+                    body = raw
+        except Exception:
+            pass
+        if body:
+            return f"[{response.status} {response.reason}] {body}"
+        return f"[{response.status} {response.reason}]"
+
     @abstractmethod
     async def get_request_body(
         self, input_data: PromptType, max_out_len: int, output: Output, **args
@@ -308,7 +345,7 @@ class BaseAPIModel(BaseModel):
                     await self.parse_stream_response(data, output)
                 output.success = True
             else:
-                output.error_info = response.reason
+                output.error_info = await self._format_error(response)
                 output.success = False
 
     async def text_infer(self, request_body, output: Output):
@@ -331,7 +368,7 @@ class BaseAPIModel(BaseModel):
                 await self.parse_text_response(data, output)
                 output.success = True
             else:
-                output.error_info = response.reason
+                output.error_info = await self._format_error(response)
                 output.success = False
 
     async def get_ppl(
@@ -387,7 +424,7 @@ class BaseAPIModel(BaseModel):
                         output.success = True
                         break
                     else:
-                        output.error_info = response.reason
+                        output.error_info = await self._format_error(response)
                         output.success = False
                         continue
             except asyncio.exceptions.CancelledError as e:
