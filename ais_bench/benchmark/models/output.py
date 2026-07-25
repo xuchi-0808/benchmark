@@ -101,19 +101,20 @@ class Output:
         Returns:
             dict: Combined prediction content
         """
+        content = getattr(self, 'content', '')
         reasoning_content = getattr(self, 'reasoning_content', '')
         if not reasoning_content:
-            return self.content
+            return content
 
-        if isinstance(self.content, list) and isinstance(reasoning_content, list):
+        if isinstance(content, list) and isinstance(reasoning_content, list):
             return [
-                self._concate_reasoning_content(content, rc)
-                for content, rc in zip(self.content, reasoning_content)
+                self._concate_reasoning_content(c, rc)
+                for c, rc in zip(content, reasoning_content)
             ]
         elif isinstance(reasoning_content, str):
-            return self._concate_reasoning_content(self.content, reasoning_content)
+            return self._concate_reasoning_content(content, reasoning_content)
 
-        return self.content
+        return content
 
     def to_dict(self):
         """Convert all instance attributes to dictionary.
