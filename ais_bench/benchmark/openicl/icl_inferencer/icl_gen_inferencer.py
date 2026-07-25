@@ -83,13 +83,6 @@ class GenInferencer(BaseApiInferencer, BaseLocalInferencer):
         await self.status_counter.post()
         await self.model.generate(input, max_out_len, output, session=session, **data)
         if output.success:
-            prediction = output.get_prediction()
-            rid = getattr(output, "response_id", "") or "-"
-            if isinstance(prediction, str) and len(prediction) > 400:
-                display = prediction[:200] + "..." + prediction[-200:]
-            else:
-                display = prediction
-            print(f"  [{data_abbr}:{index}] [{rid}] => {display}")
             await self.status_counter.rev()
         else:
             await self.status_counter.failed()
