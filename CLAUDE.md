@@ -13,15 +13,37 @@
 | `master` | 只跟踪 upstream master，从不直接提交 |
 | `xuchi_bench` | **主干开发分支**，所有定制都在此分支上开发 |
 
-## 同步上游
+## 同步上游（Rebase 策略）
+
+**原则**：所有 fork 定制 commit 永远叠在上游主线之后，保持线性历史，为未来合入上游铺路。
 
 ```bash
+# 1. 更新本地 master 跟踪上游
 git checkout master
 git pull upstream master
+
+# 2. 切回 xuchi_bench，rebase 到最新的 master
 git checkout xuchi_bench
-git merge master
-git push origin xuchi_bench
+git rebase master
+
+# 3. 如有冲突，逐个解决后 git add + git rebase --continue
+
+# 4. 强制推送（rebase 改写了历史，必须 force push）
+git push --force-with-lease origin xuchi_bench
 ```
+
+### 为什么用 rebase 而不是 merge
+
+| 方式 | 结果 |
+|------|------|
+| `git merge master` | 产生 merge commit，上游 commit 与定制 commit 交错 |
+| `git rebase master` | 定制 commit 全部叠在最上层，`xuchi_bench..master` 的 diff 清晰对应所有改动 |
+
+### 定制 commit 规范
+
+- 每个 commit 语义独立、原子化（一个功能 = 一个 commit）
+- 使用 `Signed-off-by`（`-s` 参数）
+- 条理清晰，方便未来挑拣（cherry-pick）合入上游
 
 ## 本分支已添加的定制
 
@@ -50,6 +72,18 @@ git push origin xuchi_bench
 ### 5. 移除实时打屏
 - 终端打印已移除，`live_infer.jsonl` 和 `predictions/*.jsonl` 不受影响
 
+### 6. `get_prediction` 防御性访问（`getattr`）
+- **文件**: `output.py`
+- **功能**: 用 `getattr(self, 'reasoning_content', '')` 替代直接属性访问，防止 `__pycache__` 残留或跨进程 pickle 导致属性不存在的崩溃
+
+### 7. Session 重建重试
+- **文件**: `base_api.py`
+- **功能**: `generate()` 的 retry 逻辑中，捕获 `"Session is closed"` 后重建 `aiohttp.ClientSession`，避免复用已损坏的 session
+
+### 8. `status_queue` 扩容
+- **文件**: `icl_base_api_inferencer.py`
+- **功能**: 队列容量从 `batch_size * 5` 提升至 `batch_size * 20`，防止高并发级联溢出
+
 ## 已知问题与调试记录
 
 ### "Session is closed" + `AttributeError: reasoning_content`
@@ -58,12 +92,21 @@ git push origin xuchi_bench
 
 **根因分析**:
 - `reasoning_content` 在 `Output.__init__` 中初始化（行: `self.reasoning_content = ""`），存在于 AISBench 上游代码中
-- **AttributeError 是次生错误**：由于代码版本不同步（服务器跑的不是 `xuchi_bench`），旧版本确实没有该字段
-- **真正元凶是 `Session is closed`**：aiohttp 的 `ClientSession` 在长序列流式请求中超时关闭，后续请求报 session 关闭，导致最终请求堆积后触发异常
+- **AttributeError 在代码版本正确时不应出现**；若仍出现，通常是 `__pycache__` 缓存了旧版字节码，`find ... -name __pycache__ -exec rm -rf {} +` 清除即可
+- **真正元凶是 `Session is closed`**：aiohttp 的 `ClientSession` 在长序列流式请求中被服务端掐断连接，导致的 session 不可用；retry 时未重建 session，同一 session 重复失败
 
 **排查订单**:
 1. 先确认代码版本：`git log --oneline -3` + `git diff HEAD -- ais_bench/benchmark/models/output.py | head -30`
 2. 如果是版本问题，切到 `xuchi_bench` 分支
-3. 如果版本对了但仍有 `Session is closed`，检查 aiohttp timeout 设置是否够大
+3. 清除 `__pycache__`：`find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null`
+4. 如果仍有 `Session is closed`，检查服务端（vLLM coordinator.py 的 out-of-order step warning 是服务端异常的早期信号）
 
-**相关代码**: `ais_bench/benchmark/models/api_models/base_api.py:line 35` — `AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=REQUEST_TIME_OUT)`
+**已实施修复**:
+- `get_prediction` 改用 `getattr` 防御性读取（`output.py:104`）
+- `generate()` retry 时检测 `"Session is closed"` 并重建 session（`base_api.py:314-317`）
+- `status_queue` 容量扩大 4 倍（`icl_base_api_inferencer.py:677`）
+
+**相关代码**:
+- `ais_bench/benchmark/models/api_models/base_api.py:line 35` — `AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=REQUEST_TIME_OUT)`
+- `ais_bench/benchmark/openicl/icl_inferencer/icl_base_api_inferencer.py:line 414-417` — 共享 session 创建
+- `ais_bench/benchmark/models/output.py:line 104` — `get_prediction()`
