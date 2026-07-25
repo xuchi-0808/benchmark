@@ -310,6 +310,11 @@ class BaseAPIModel(BaseModel):
                     f"{exc_type}: {exc_msg}"
                 )
                 await output.clear_time_points()
+                # If session is closed, create a new one for the retry
+                if "Session is closed" in exc_msg:
+                    self.session = aiohttp.ClientSession(
+                        trust_env=True, timeout=AIOHTTP_TIMEOUT
+                    )
                 continue
         if close_session:
             self.logger.debug(f"Waiting for session close ...")

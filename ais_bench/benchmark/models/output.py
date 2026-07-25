@@ -101,18 +101,17 @@ class Output:
         Returns:
             dict: Combined prediction content
         """
-        if not self.reasoning_content:
+        reasoning_content = getattr(self, 'reasoning_content', '')
+        if not reasoning_content:
             return self.content
 
-        if isinstance(self.content, list) and isinstance(self.reasoning_content, list):
+        if isinstance(self.content, list) and isinstance(reasoning_content, list):
             return [
-                self._concate_reasoning_content(content, reasoning_content)
-                for content, reasoning_content in zip(
-                    self.content, self.reasoning_content
-                )
+                self._concate_reasoning_content(content, rc)
+                for content, rc in zip(self.content, reasoning_content)
             ]
-        elif isinstance(self.reasoning_content, str):
-            return self._concate_reasoning_content(self.content, self.reasoning_content)
+        elif isinstance(reasoning_content, str):
+            return self._concate_reasoning_content(self.content, reasoning_content)
 
         return self.content
 

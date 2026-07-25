@@ -671,10 +671,10 @@ class StatusCounter(threading.Thread):
         self.failed_req = 0
         self.finish_req = 0
         self.case_finish_req = 0
-        # Use thread-safe standard library queue with capacity equal to batch_size * 5
+        # Use thread-safe standard library queue with capacity equal to batch_size * 20
         self.status_queue = None
         if batch_size > 0:
-            self.status_queue: std_queue.Queue = std_queue.Queue(maxsize=batch_size * 5)
+            self.status_queue: std_queue.Queue = std_queue.Queue(maxsize=batch_size * 20)
         self._stop_event = threading.Event()
         self._print_interval = 1.0  # Print status once per second
 
